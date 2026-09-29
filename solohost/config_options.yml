@@ -1,0 +1,7 @@
+title: "PiChain Monitor"
+eyebrow: SoloHost App
+description: "tạo cho tôi app:  PiChain Monitor  ứng dụng theo dõi blockchain Pi Network: trạng thái mạng, block mới, giao dịch, ví, số dư, phí và hoạt động mạng theo thời gian thực. Giao diện đơn giản, nhanh, dễ sử dụng và tối ưu cho"
+footer_hint: Ready to run on Pi Desktop SoloHost.
+output_file: .env
+after_save: Saved. Start the app from SoloHost.
+fields: []

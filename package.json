@@ -1,0 +1,14 @@
+{
+  "name": "pi-chain-monitor",
+  "version": "1.0.0",
+  "description": "PiChain Monitor - Pi Network blockchain tracking application for SoloHost & Pi Browser",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  }
+}

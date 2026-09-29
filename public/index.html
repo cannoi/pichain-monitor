@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PiChain Monitor - Pi Network Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<style>.paf-made-by{position:fixed;right:8px;bottom:8px;width:min(72px,12vw);max-width:12vw;height:auto;object-fit:contain;opacity:.5;background:transparent;padding:0;border:0;box-shadow:none;filter:none;pointer-events:none;z-index:30}</style></head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans" x-data="piMonitor()" x-init="init()">
+
+  <!-- Header -->
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center font-bold text-xl shadow-lg shadow-amber-500/20">π</div>
+        <div>
+          <h1 class="font-bold text-lg text-amber-400 tracking-wide">PiChain Monitor</h1>
+          <p class="text-xs text-slate-400">Pi Network Realtime Explorer</p>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-3 mt-2 sm:mt-0">
+        <!-- Network Switcher -->
+        <div class="bg-slate-800 p-1 rounded-xl flex">
+          <button @click="setNetwork('mainnet')" :class="network === 'mainnet' ? 'bg-amber-500 text-slate-950 font-semibold shadow' : 'text-slate-300 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs transition">Mainnet</button>
+          <button @click="setNetwork('testnet')" :class="network === 'testnet' ? 'bg-amber-500 text-slate-950 font-semibold shadow' : 'text-slate-300 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs transition">Testnet</button>
+        </div>
+
+        <!-- Status Badge -->
+        <div class="flex items-center space-x-2 bg-emerald-500/10 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="text-xs font-medium text-emerald-300" x-text="stats.consensusStatus || 'Online'"></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-6 flex-1 w-full space-y-6">
+
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs text-slate-400">Chiều cao Block</p>
+        <p class="text-2xl font-bold text-amber-400 mt-1" x-text="stats.height ? stats.height.toLocaleString() : '...'"></p>
+        <p class="text-[10px] text-emerald-400 mt-1">⚡ Cập nhật thời gian thực</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs text-slate-400">Tốc độ (TPS)</p>
+        <p class="text-2xl font-bold text-amber-400 mt-1" x-text="stats.tps || '...'"></p>
+        <p class="text-[10px] text-slate-400 mt-1">Giao dịch mỗi giây</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs text-slate-400">Validator Nodes</p>
+        <p class="text-2xl font-bold text-amber-400 mt-1" x-text="stats.validators ? stats.validators.toLocaleString() : '...'"></p>
+        <p class="text-[10px] text-slate-400 mt-1">Node đồng thuận</p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs text-slate-400">Phí trung bình</p>
+        <p class="text-2xl font-bold text-amber-400 mt-1" x-text="stats.avgFee || '...'"></p>
+        <p class="text-[10px] text-slate-400 mt-1">Phí giao dịch tối ưu</p>
+      </div>
+    </div>
+
+    <!-- Search / Wallet Lookup -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+      <h2 class="text-sm font-semibold text-slate-200 mb-3">Tra cứu ví hoặc địa chỉ giao dịch</h2>
+      <div class="flex gap-2">
+        <input type="text" x-model="searchQuery" placeholder="Nhập địa chỉ ví Pi (vd: pi1...)" class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 transition">
+        <button @click="lookupWallet()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-5 py-2.5 rounded-xl text-sm transition flex items-center space-x-2">
+          <span>Tra cứu</span>
+        </button>
+      </div>
+
+      <!-- Wallet Result Modal/Box -->
+      <template x-if="walletResult">
+        <div class="mt-4 p-4 bg-slate-950 border border-amber-500/30 rounded-xl space-y-3">
+          <div class="flex justify-between items-start">
+            <div>
+              <p class="text-xs text-amber-400 font-medium">Kết quả tra cứu ví</p>
+              <p class="text-sm font-mono text-white mt-0.5" x-text="walletResult.address"></p>
+            </div>
+            <button @click="saveWatched(walletResult.address)" class="bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs px-3 py-1.5 rounded-lg border border-amber-500/20">
+              + Theo dõi ví này
+            </button>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            <div class="bg-slate-900 p-3 rounded-lg">
+              <p class="text-[11px] text-slate-400">Số dư khả dụng</p>
+              <p class="text-base font-bold text-emerald-400" x-text="walletResult.balance"></p>
+            </div>
+            <div class="bg-slate-900 p-3 rounded-lg">
+              <p class="text-[11px] text-slate-400">Số dư khóa</p>
+              <p class="text-base font-bold text-amber-300" x-text="walletResult.lockedBalance"></p>
+            </div>
+            <div class="bg-slate-900 p-3 rounded-lg">
+              <p class="text-[11px] text-slate-400">Tổng giao dịch</p>
+              <p class="text-base font-bold text-white" x-text="walletResult.txCount"></p>
+            </div>
+            <div class="bg-slate-900 p-3 rounded-lg">
+              <p class="text-[11px] text-slate-400">Ngày tạo ví</p>
+              <p class="text-base font-bold text-white" x-text="walletResult.createdDate"></p>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Two Column Layout: Blocks & Transactions -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Recent Blocks -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-sm font-semibold text-slate-200">Block mới nhất</h2>
+          <span class="text-xs text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg">Live Feed</span>
+        </div>
+        <div class="space-y-2.5 flex-1 overflow-y-auto max-h-[380px]">
+          <template x-for="b in blocks" :key="b.height">
+            <div class="bg-slate-950 border border-slate-800/60 p-3 rounded-xl flex justify-between items-center hover:border-slate-700 transition">
+              <div>
+                <div class="flex items-center space-x-2">
+                  <span class="font-bold text-amber-400 text-sm" x-text="'#' + b.height"></span>
+                  <span class="text-[11px] text-slate-400 font-mono" x-text="b.hash.substring(0, 12) + '...'"></span>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-0.5" x-text="'Validator: ' + b.validator"></p>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-medium text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded" x-text="b.txCount + ' Txs'"></span>
+                <p class="text-[10px] text-slate-500 mt-1" x-text="b.time"></p>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Recent Transactions & Watched Wallets -->
+      <div class="space-y-6 flex flex-col">
+        <!-- Transactions -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-sm font-semibold text-slate-200">Giao dịch gần đây</h2>
+            <span class="text-xs text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg">Mempool</span>
+          </div>
+          <div class="space-y-2.5 overflow-y-auto max-h-[220px]">
+            <template x-for="tx in transactions" :key="tx.txid">
+              <div class="bg-slate-950 border border-slate-800/60 p-2.5 rounded-xl flex justify-between items-center">
+                <div>
+                  <div class="flex items-center space-x-2">
+                    <span class="text-xs font-mono text-amber-300" x-text="tx.sender.substring(0, 8) + '... ➔ ' + tx.receiver.substring(0, 8) + '...'"></span>
+                  </div>
+                  <p class="text-[10px] text-slate-500 mt-0.5" x-text="tx.time"></p>
+                </div>
+                <span class="text-xs font-bold text-white" x-text="tx.amount"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Watched Wallets List -->
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <h2 class="text-sm font-semibold text-slate-200 mb-3">Ví đang theo dõi (<span x-text="watchedWallets.length"></span>)</h2>
+          <div class="space-y-2 max-h-[150px] overflow-y-auto">
+            <template x-for="w in watchedWallets" :key="w.id">
+              <div class="bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl flex justify-between items-center">
+                <div>
+                  <p class="text-xs font-mono text-amber-400" x-text="w.address.substring(0, 16) + '...'"></p>
+                  <p class="text-[10px] text-slate-500" x-text="w.alias + ' (' + w.network + ')'"></p>
+                </div>
+                <button @click="removeWatched(w.id)" class="text-red-400 hover:text-red-300 text-xs px-2 py-1">Xóa</button>
+              </div>
+            </template>
+            <template x-if="watchedWallets.length === 0">
+              <p class="text-xs text-slate-500 text-center py-2">Chưa có ví nào được ghim theo dõi.</p>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-slate-900 border-t border-slate-800 py-4 mt-8 text-center text-xs text-slate-500">
+    PiChain Monitor &bull; Optimized for Pi Browser & SoloHost &bull; Powered by Pi Network
+  </footer>
+
+  <!-- Alpine Logic -->
+  <script>
+    function piMonitor() {
+      return {
+        network: 'mainnet',
+        stats: {},
+        blocks: [],
+        transactions: [],
+        searchQuery: '',
+        walletResult: null,
+        watchedWallets: [],
+        init() {
+          this.fetchAll();
+          setInterval(() => this.fetchAll(), 10000);
+        },
+        setNetwork(net) {
+          this.network = net;
+          this.walletResult = null;
+          this.fetchAll();
+        },
+        fetchAll() {
+          fetch(`/api/stats?network=${this.network}`)
+            .then(res => res.json())
+            .then(data => this.stats = data);
+
+          fetch(`/api/blocks?network=${this.network}`)
+            .then(res => res.json())
+            .then(data => this.blocks = data);
+
+          fetch(`/api/transactions?network=${this.network}`)
+            .then(res => res.json())
+            .then(data => this.transactions = data);
+
+          this.fetchWatched();
+        },
+        lookupWallet() {
+          if (!this.searchQuery) return;
+          fetch(`/api/wallet/${this.searchQuery}?network=${this.network}`)
+            .then(res => res.json())
+            .then(data => {
+              if (data.error) {
+                alert(data.error);
+              } else {
+                this.walletResult = data;
+              }
+            });
+        },
+        fetchWatched() {
+          fetch('/api/watched')
+            .then(res => res.json())
+            .then(data => this.watchedWallets = data);
+        },
+        saveWatched(address) {
+          fetch('/api/watched', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ address, network: this.network, alias: 'Ví ghim #' + (this.watchedWallets.length + 1) })
+          })
+          .then(res => res.json())
+          .then(() => this.fetchWatched());
+        },
+        removeWatched(id) {
+          fetch(`/api/watched/${id}`, { method: 'DELETE' })
+            .then(() => this.fetchWatched());
+        }
+      }
+    }
+  </script>
+<img class="paf-made-by" src="/made-by.png" alt="Made with App Builder — Pi SoloHost"></body>
+</html>
