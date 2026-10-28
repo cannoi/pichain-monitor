@@ -1,0 +1,29 @@
+title: "PiChain Monitor"
+eyebrow: SoloHost App
+description: "tạo cho tôi app:  PiChain Monitor  ứng dụng theo dõi blockchain Pi Network: trạng thái mạng, block mới, giao dịch, ví, số dư, phí và hoạt động mạng theo thời gian thực. Giao diện đơn giản, nhanh, dễ sử dụng và tối ưu cho"
+footer_hint: Ready to run on Pi Desktop SoloHost.
+output_file: .env
+after_save: Saved. Start the app from SoloHost.
+fields:
+  - name: ADMIN_TOKEN
+    label: Admin token for AI settings and logs
+    type: password
+    required: false
+  - name: HORIZON_MAINNET_URL
+    label: Mainnet Horizon URL (optional)
+    type: text
+    required: false
+  - name: HORIZON_TESTNET_URL
+    label: Testnet Horizon URL (optional)
+    type: text
+    required: false
+  - name: HORIZON_ALLOW_PRIVATE
+    label: Allow private Pi Node Horizon (trusted local node only)
+    type: text
+    default: "0"
+    required: false
+  - name: COLLECTOR_ENABLED
+    label: Enable background collector (0 to disable)
+    type: text
+    default: "1"
+    required: false

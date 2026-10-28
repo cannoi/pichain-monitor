@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en" x-data="piMonitor()" x-init="init()">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PiChain Monitor — Pi Network Explorer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="/vendor/alpine.min.js"></script>
+  <script src="/vendor/chart.umd.min.js"></script>
+  <script src="/pi-indicators.js"></script>
+  <script src="/pi-chart.js"></script>
+  <link rel="stylesheet" href="/ai-panel.css">
+  <style>
+    .paf-made-by{position:fixed;right:8px;bottom:8px;width:min(72px,12vw);max-width:12vw;height:auto;object-fit:contain;opacity:.5;background:transparent;padding:0;border:0;box-shadow:none;filter:none;pointer-events:none;z-index:30}
+    [x-cloak]{display:none!important}
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
+
+  <header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap justify-between items-center gap-2">
+      <div class="flex items-center space-x-3">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-orange-600 flex items-center justify-center font-bold text-xl shadow-lg shadow-amber-500/20">π</div>
+        <div>
+          <h1 class="font-bold text-lg text-amber-400 tracking-wide">PiChain Monitor</h1>
+          <p class="text-xs text-slate-400" x-text="t('subtitle')"></p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 sm:space-x-3 flex-wrap">
+        <div class="bg-slate-800 p-1 rounded-xl flex text-xs">
+          <button @click="setLang('en')" :class="lang==='en' ? 'bg-amber-500 text-slate-950 font-semibold' : 'text-slate-300'" class="px-2.5 py-1 rounded-lg transition">EN</button>
+          <button @click="setLang('vi')" :class="lang==='vi' ? 'bg-amber-500 text-slate-950 font-semibold' : 'text-slate-300'" class="px-2.5 py-1 rounded-lg transition">VI</button>
+        </div>
+        <div class="bg-slate-800 p-1 rounded-xl flex text-xs">
+          <button @click="setMode(true)" :class="simpleMode ? 'bg-emerald-500 text-slate-950 font-semibold' : 'text-slate-300'" class="px-2.5 py-1 rounded-lg" x-text="t('modeSimple')"></button>
+          <button @click="setMode(false)" :class="!simpleMode ? 'bg-emerald-500 text-slate-950 font-semibold' : 'text-slate-300'" class="px-2.5 py-1 rounded-lg" x-text="t('modePro')"></button>
+        </div>
+        <div class="bg-slate-800 p-1 rounded-xl flex">
+          <button @click="setNetwork('mainnet')" :class="network==='mainnet' ? 'bg-amber-500 text-slate-950 font-semibold shadow' : 'text-slate-300 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs transition">Mainnet</button>
+          <button @click="setNetwork('testnet')" :class="network==='testnet' ? 'bg-amber-500 text-slate-950 font-semibold shadow' : 'text-slate-300 hover:text-white'" class="px-3 py-1.5 rounded-lg text-xs transition">Testnet</button>
+        </div>
+        <div class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border" role="status" aria-live="polite"
+             :class="liveState==='live' ? 'bg-emerald-500/10 border-emerald-500/40' : (liveState==='wait' ? 'bg-amber-500/10 border-amber-500/40' : 'bg-red-500/10 border-red-500/40')"
+             :title="liveTitle()">
+          <span class="w-2.5 h-2.5 rounded-full shrink-0"
+                :class="liveState==='live' ? 'bg-emerald-400 animate-pulse' : (liveState==='wait' ? 'bg-amber-400 animate-pulse' : 'bg-red-500')"></span>
+          <span class="text-[11px] font-medium"
+                :class="liveState==='live' ? 'text-emerald-300' : (liveState==='wait' ? 'text-amber-300' : 'text-red-300')"
+                x-text="liveState==='live' ? t('liveOn') : (liveState==='wait' ? t('liveWait') : t('liveOff'))"></span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-3 sm:px-4 py-4 flex-1 w-full space-y-4">
+    <div class="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-4 py-3 text-sm text-amber-100/90" x-show="simpleMode">
+      <span x-text="t('easyTip')"></span>
+    </div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+      <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-3 sm:p-4 shadow-sm">
+        <p class="text-xs text-slate-400" x-text="t('blockHeight')"></p>
+        <p class="text-2xl font-bold text-amber-400 mt-1" x-text="fmtMeta(stats.height)"></p>
+        <p class="text-[10px] text-emerald-400 mt-1" x-text="t('liveUpdate')"></p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs text-slate-400" x-text="t('protocol')"></p>
+        <p class="text-2xl font-bold text-amber-400 mt-1" x-text="fmtMeta(stats.protocol)"></p>
+        <p class="text-[10px] text-slate-400 mt-1" x-text="stats.networkPassphrase || 'Pi Network'"></p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs text-slate-400" x-text="t('capacity')"></p>
+        <p class="text-2xl font-bold text-amber-400 mt-1" x-text="fmtMeta(stats.capacity)"></p>
+        <p class="text-[10px] text-slate-400 mt-1" x-text="t('ledgerUsage')"></p>
+      </div>
+      <div class="bg-slate-900 border border-slate-800/80 rounded-2xl p-4 shadow-sm">
+        <p class="text-xs text-slate-400" x-text="t('avgFee')"></p>
+        <p class="text-2xl font-bold text-amber-400 mt-1" x-text="fmtMeta(stats.avgFee)"></p>
+        <p class="text-[10px] text-slate-400 mt-1" x-text="t('baseFee')"></p>
+      </div>
+    </div>
+
+    <div class="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap px-0.5">
+      <span class="inline-flex items-center gap-1.5 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg max-w-full">
+        <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="liveState==='live' ? 'bg-emerald-400' : (liveState==='wait' ? 'bg-amber-400' : 'bg-red-400')"></span>
+        <span class="truncate" x-text="liveState==='live' ? t('dataOk') : (liveState==='wait' ? t('liveWait') : t('dataBad'))"></span>
+      </span>
+      <span class="text-slate-600 truncate" x-show="stats.consensusReason" x-text="stats.consensusReason"></span>
+    </div>
+
+    <!-- Sources & capability (P1) -->
+    <details class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-xs" x-show="!simpleMode">
+      <summary class="cursor-pointer text-slate-300 font-medium" x-text="t('sourcesTitle')"></summary>
+      <div class="mt-3 space-y-2 text-slate-400">
+        <p x-text="t('sourcesHint')"></p>
+        <p class="font-mono text-[10px]" x-text="'Horizon: '+(sources.horizon?.mainnet||'')+' | '+(sources.horizon?.testnet||'')"></p>
+        <p x-show="sources.collector">Collector: <span x-text="sources.collector?.lastRun ? 'last '+sources.collector.lastRun : '—'"></span>
+          <span x-show="sources.collector?.lastError" class="text-red-400" x-text="' err: '+sources.collector.lastError"></span>
+        </p>
+        <div class="grid grid-cols-2 gap-2" x-show="sources.capabilities">
+          <template x-for="net in ['mainnet','testnet']" :key="net">
+            <div class="bg-slate-950 rounded-lg p-2">
+              <p class="text-amber-400 font-medium" x-text="net"></p>
+              <template x-if="sources.capabilities?.[net]?.endpoints">
+                <div class="flex flex-wrap gap-1 mt-1">
+                  <template x-for="(ep, key) in sources.capabilities[net].endpoints" :key="key">
+                    <span class="px-1 rounded" :class="ep.ok ? 'bg-emerald-500/20 text-emerald-300' : 'bg-slate-800 text-slate-500'" x-text="key"></span>
+                  </template>
+                </div>
+              </template>
+              <p class="text-slate-600 mt-1" x-show="!sources.capabilities?.[net]" x-text="t('notProbed')"></p>
+            </div>
+          </template>
+        </div>
+        <p class="text-slate-500" x-show="snapshotNote" x-text="snapshotNote"></p>
+      </div>
+    </details>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="text-sm font-semibold text-slate-200" x-text="t('activityChart')"></h2>
+        <span class="text-xs text-slate-400" x-text="trendSummary"></span>
+      </div>
+      <div class="h-48 relative"><canvas id="activityChart"></canvas></div>
+    </div>
+
+
+    <!-- Multi-asset / DEX observation (richer on Testnet) -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg space-y-4" x-show="!simpleMode">
+      <div class="flex flex-wrap justify-between items-center gap-2">
+        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg>
+          <span x-text="t('assetsTitle')"></span>
+        </h2>
+        <span class="text-[10px] text-slate-400" x-text="t('viewOnly')"></span>
+      </div>
+      <p class="text-[11px] text-amber-400/90" x-show="network==='testnet'" x-text="t('testnetNote')"></p>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <p class="text-xs text-slate-400 mb-2" x-text="t('topAssets')"></p>
+          <div class="space-y-1.5 max-h-48 overflow-y-auto">
+            <template x-for="a in assets" :key="(a.code||'')+(a.issuer||'')">
+              <div class="bg-slate-950 border border-slate-800/60 px-2.5 py-1.5 rounded-lg flex justify-between text-xs gap-2">
+                <span class="font-mono text-amber-300 truncate" x-text="a.code"></span>
+                <span class="text-slate-400 whitespace-nowrap" x-text="holderLabel(a)"></span>
+              </div>
+            </template>
+            <template x-if="!assets.length"><p class="text-[11px] text-slate-500" x-text="t('noAssets')"></p></template>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-2" x-text="t('recentTrades')"></p>
+          <div class="space-y-1.5 max-h-48 overflow-y-auto">
+            <p class="text-[10px] text-slate-500 mb-1.5" x-text="t('tapTrade')"></p>
+            <template x-for="tr in trades" :key="tr.id">
+              <button type="button" class="w-full text-left bg-slate-950 border border-slate-800/60 hover:border-amber-500/50 px-2.5 py-1.5 rounded-lg text-xs transition"
+                      @click="openTradePair(tr)">
+                <div class="flex justify-between gap-2">
+                  <span class="font-mono text-amber-300" x-text="tr.pair"></span>
+                  <span class="text-slate-400" x-text="tr.time"></span>
+                </div>
+                <p class="text-[10px] text-slate-500 mt-0.5" x-text="(tr.baseAmount||'')+' → '+(tr.counterAmount||'')+(tr.price?' · '+tr.price:'')"></p>
+              </button>
+            </template>
+            <template x-if="!trades.length"><p class="text-[11px] text-slate-500" x-text="t('noTrades')"></p></template>
+          </div>
+        </div>
+        <div>
+          <p class="text-xs text-slate-400 mb-2" x-text="t('pools')"></p>
+          <div class="space-y-1.5 max-h-48 overflow-y-auto">
+            <template x-for="pl in pools" :key="pl.id">
+              <div class="bg-slate-950 border border-slate-800/60 px-2.5 py-1.5 rounded-lg text-xs">
+                <span class="text-amber-300 font-mono" x-text="(pl.reserves||[]).map(r=>r.code).join('/')"></span>
+                <p class="text-[10px] text-slate-500 mt-0.5" x-text="(pl.reserves||[]).map(r=>Number(r.amount).toFixed(2)+' '+r.code).join(' · ')"></p>
+              </div>
+            </template>
+            <template x-if="!pools.length"><p class="text-[11px] text-slate-500" x-text="t('noPools')"></p></template>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pair chart: any pair, any timeframe, candles/line/area, volume, indicators -->
+      <div class="mt-4 border-t border-slate-800 pt-4" id="pairPanel">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 class="text-sm font-semibold text-slate-200 flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4v3m0 10v3M7 7h0m0 10h0M7 7v10M17 3v4m0 10v4M17 7v10M5 7h4v10H5zM15 7h4v10h-4z"/></svg>
+            <span x-text="t('pairChart')"></span>
+          </h3>
+          <span class="text-[11px] font-mono text-amber-300" x-text="selectedPairLabel"></span>
+        </div>
+        <!-- Stock-style: pick pair from live list (no issuer typing) -->
+        <div class="flex flex-col sm:flex-row gap-2 mb-3">
+          <div class="flex-1 min-w-0">
+            <label class="text-[10px] text-slate-500 block mb-1" x-text="t('pickPair')"></label>
+            <select class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2.5 text-sm font-mono text-amber-300"
+                    x-model="pickedPairKey" @change="openPickedPair()">
+              <option value="" x-text="t('pickPairPh')"></option>
+              <template x-for="ap in availablePairs" :key="ap.key">
+                <option :value="ap.key" x-text="ap.label + (ap.lastPrice ? (' · '+ap.lastPrice) : '')"></option>
+              </template>
+            </select>
+            <p class="text-[10px] text-slate-500 mt-1" x-show="!availablePairs.length" x-text="t('noPairsAvail')"></p>
+          </div>
+          <div class="flex sm:items-end gap-2">
+            <button type="button" class="flex-1 sm:flex-none bg-amber-500 text-slate-950 font-semibold rounded-xl px-4 py-2.5 text-sm" @click="openPickedPair()" x-text="t('openChart')"></button>
+          </div>
+        </div>
+        <p class="text-[11px] text-slate-500 mb-2" x-text="t('pairsHint')"></p>
+
+        <div x-show="selectedPairLabel" x-cloak>
+          <!-- Default: candles + standard TF strip -->
+          <div class="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1" role="tablist" :aria-label="t('timeframe')">
+            <template x-for="f in tfList" :key="f.id">
+              <button type="button" role="tab" class="shrink-0 text-[11px] px-2.5 py-1 rounded-lg border"
+                      :class="pairTf===f.id ? 'bg-amber-500 text-slate-950 border-amber-500 font-semibold' : 'bg-slate-950 text-slate-300 border-slate-700'"
+                      @click="setTf(f.id)" x-text="f.label"></button>
+            </template>
+          </div>
+          <!-- Always-on essentials -->
+          <div class="flex flex-wrap items-center gap-1.5 mt-2 text-[11px]">
+            <span class="px-2 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-200" x-text="'🕯 '+t('tCandles')"></span>
+            <span class="px-2 py-1 rounded-lg border" :class="pairVol ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300' : 'bg-slate-950 border-slate-700 text-slate-400'" x-text="'▥ '+t('volume')"></span>
+            <span class="px-2 py-1 rounded-lg bg-slate-800/80 text-slate-300" x-show="pairInd.sma">SMA20</span>
+            <button type="button" class="px-2 py-1 rounded-lg border bg-slate-950 border-slate-700 text-slate-300" @click="showChartTools=!showChartTools" x-text="showChartTools ? t('hideTools') : t('moreTools')"></button>
+            <span class="ml-auto flex gap-1.5">
+              <button type="button" class="bg-emerald-600/80 text-white px-2 py-1 rounded-lg" @click="analyzePairTa(selectedBase, selectedCounter)" x-text="t('taBtn')"></button>
+              <button type="button" class="bg-slate-800 text-slate-300 px-2 py-1 rounded-lg" @click="clearSelectedPair()" x-text="t('close')"></button>
+            </span>
+          </div>
+          <!-- Optional tools (collapsed by default) -->
+          <div class="flex flex-wrap items-center gap-1.5 mt-2 text-[11px] p-2 bg-slate-950/80 border border-slate-800 rounded-xl" x-show="showChartTools" x-cloak>
+            <select x-model="pairType" @change="chartOptsChanged()" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1" :aria-label="t('chartType')">
+              <option value="candles" x-text="'🕯 '+t('tCandles')"></option>
+              <option value="hollow" x-text="'▯ '+t('tHollow')"></option>
+              <option value="ohlc" x-text="'┣ '+t('tOhlc')"></option>
+              <option value="heikin" x-text="'◈ '+t('tHeikin')"></option>
+              <option value="line" x-text="'📈 '+t('tLine')"></option>
+              <option value="area" x-text="'◿ '+t('tArea')"></option>
+            </select>
+            <button type="button" class="px-2 py-1 rounded-lg border" :class="pairVol ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-300' : 'bg-slate-950 border-slate-700 text-slate-300'" @click="pairVol=!pairVol; chartOptsChanged()">▥ <span x-text="t('volume')"></span></button>
+            <div class="relative">
+              <button type="button" class="px-2 py-1 rounded-lg border bg-slate-950 border-slate-700 text-slate-200" @click="indMenu=!indMenu" :aria-expanded="indMenu">ƒx <span x-text="t('indicators')"></span><span class="text-amber-400" x-show="indCount()>0" x-text="' ('+indCount()+')'"></span></button>
+              <div class="absolute z-30 mt-1 left-0 w-60 max-w-[80vw] bg-slate-900 border border-slate-700 rounded-xl p-3 shadow-xl space-y-1" x-show="indMenu" @click.outside="indMenu=false" x-cloak>
+                <p class="text-[10px] uppercase text-slate-500" x-text="t('indOverlay')"></p>
+                <template x-for="k in indOverlay" :key="k.id">
+                  <label class="flex items-center gap-2 py-0.5"><input type="checkbox" :checked="pairInd[k.id]" @change="toggleInd(k.id)"><span class="inline-block w-2 h-2 rounded-full" :style="'background:'+k.color"></span><span x-text="k.label"></span></label>
+                </template>
+                <p class="text-[10px] uppercase text-slate-500 pt-1" x-text="t('indPane')"></p>
+                <template x-for="k in indPane" :key="k.id">
+                  <label class="flex items-center gap-2 py-0.5"><input type="checkbox" :checked="pairInd[k.id]" @change="toggleInd(k.id)"><span class="inline-block w-2 h-2 rounded-full" :style="'background:'+k.color"></span><span x-text="k.label"></span></label>
+                </template>
+                <p class="text-[10px] text-slate-500 pt-1" x-text="t('indNote')"></p>
+              </div>
+            </div>
+            <button type="button" class="px-2 py-1 rounded-lg border bg-slate-950 border-slate-700 text-slate-300" @click="chartReset()" :title="t('resetView')">⟲</button>
+            <button type="button" class="px-2 py-1 rounded-lg border bg-slate-950 border-slate-700 text-slate-300" @click="chartPng()" :title="t('savePng')">⬇ PNG</button>
+            <button type="button" class="px-2 py-1 rounded-lg border bg-slate-950 border-slate-700 text-slate-300" @click="loadCandles(true)" :title="t('refresh')">↻</button>
+          </div>
+          <p class="text-[11px] text-slate-500 mt-2" x-text="t('pairChartNote')"></p>
+          <p class="text-[11px] text-red-400 mt-1" x-show="pairCandleError" x-text="pairCandleError"></p>
+          <div class="relative mt-2 bg-slate-950 rounded-xl border border-slate-800 overflow-hidden" :style="'height:'+proHeight()+'px'">
+            <div id="proChart" class="absolute inset-0"></div>
+            <div class="absolute inset-0 flex items-center justify-center text-[11px] text-slate-400 pointer-events-none" x-show="pairLoading" x-text="t('loading')"></div>
+          </div>
+          <p class="text-[10px] text-slate-500 mt-1" x-show="pairCandleMeta" :title="t('chartMetaTip')"
+             x-text="pairCandleMeta ? ('ⓘ '+pairCandleMeta.count+' · '+pairTf+(pairCandleMeta.derivedFrom ? ' ('+t('derivedFrom')+' '+pairCandleMeta.derivedFrom+')' : '')+' · '+t('updated')+' '+pairCandleMeta.time+' · '+t('gapNote')) : ''"></p>
+          <div class="grid grid-cols-2 gap-2 text-[11px] mt-2" x-show="pairDetail && pairDetail.spread">
+            <p x-show="pairDetail.spread?.mid != null" x-text="'Mid ~ '+Number(pairDetail.spread.mid).toPrecision(6)"></p>
+            <p x-show="pairDetail.spread?.spreadBps != null" x-text="'Spread '+Number(pairDetail.spread.spreadBps).toFixed(1)+' bps'"></p>
+          </div>
+        <template x-if="pairTa && pairTa.analysis">
+          <div class="mt-2 p-3 bg-slate-950 border border-emerald-500/25 rounded-xl text-xs space-y-1">
+            <p class="text-emerald-300 font-medium" x-text="t('taTitle')"></p>
+            <p x-show="pairTa.analysis.note==='insufficient_history'" class="text-slate-500" x-text="t('taNeedMore')"></p>
+            <div class="grid grid-cols-2 gap-1" x-show="pairTa.analysis.sampleSize">
+              <span x-text="t('taLast')+': '+fmtNum(pairTa.analysis.lastClose)"></span>
+              <span :class="(pairTa.analysis.changePct||0)>=0?'text-emerald-400':'text-red-400'" x-text="t('taChange')+': '+(pairTa.analysis.changePct!=null?pairTa.analysis.changePct.toFixed(2)+'%':'—')"></span>
+              <span x-text="'SMA7 '+fmtNum(pairTa.analysis.sma7)"></span>
+              <span x-text="'RSI '+ (pairTa.analysis.rsi14!=null?pairTa.analysis.rsi14.toFixed(1):'—')"></span>
+              <span class="col-span-2" x-text="t('taTrend')+': '+trendLabel(pairTa.analysis.trend)"></span>
+            </div>
+          </div>
+        </template>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- One-tap observe (P4) — works without AI API key -->
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+      <h2 class="text-sm font-semibold text-slate-200 mb-2" x-text="t('observeTitle')"></h2>
+      <p class="text-[11px] text-slate-500 mb-2" x-text="t('observeHint')"></p>
+      <div class="flex gap-2 flex-wrap">
+        <input type="text" x-model="observeQ" :placeholder="t('observePh')" class="flex-1 min-w-[180px] bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+        <button type="button" @click="runObserve()" class="bg-emerald-500 text-slate-950 font-semibold text-sm px-4 py-2 rounded-xl" x-text="t('observeGo')"></button>
+      </div>
+      <div class="flex gap-2 flex-wrap mt-2">
+        <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-slate-300" @click="observeQ = lang==='vi' ? 'Tóm tắt mạng' : 'Network summary'; runObserve()" x-text="t('obsNet')"></button>
+        <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-slate-300" @click="observeQ = lang==='vi' ? 'Trade gần đây' : 'Recent trades'; runObserve()" x-text="t('obsTrades')"></button>
+        <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-slate-300" @click="observeQ = lang==='vi' ? 'Watchlist' : 'Watchlist'; runObserve()" x-text="'Watchlist'"></button>
+      </div>
+      <template x-if="observeResult">
+        <div class="mt-3 space-y-2">
+          <div class="p-3 bg-slate-950 border border-emerald-500/20 rounded-xl text-xs whitespace-pre-wrap max-h-56 overflow-y-auto" x-text="observeResult.reply_markdown"></div>
+          <div class="text-[10px] text-slate-500" x-show="observeResult.evidence?.length">
+            <p class="font-medium text-slate-400" x-text="t('evidence')"></p>
+            <template x-for="ev in observeResult.evidence" :key="ev.evidenceId||ev.source">
+              <p class="font-mono truncate" x-text="(ev.ok?'✓':'✗')+' '+(ev.source||'')+' · '+(ev.fetchedAt||'')"></p>
+            </template>
+          </div>
+          <p class="text-[10px] text-amber-400/80" x-show="observeResult.validation && !observeResult.validation.ok" x-text="t('unverified')"></p>
+          <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-emerald-300" @click="exportObserveMd()" x-text="t('exportMd')"></button>
+        </div>
+      </template>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+      <h2 class="text-sm font-semibold text-slate-200 mb-3" x-text="t('lookupTitle')"></h2>
+      <div class="flex gap-2 flex-wrap">
+        <input type="text" x-model="searchQuery" :placeholder="t('lookupPlaceholder')"
+          class="flex-1 min-w-[200px] bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-amber-500 font-mono">
+        <button @click="lookupWallet()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold px-5 py-2.5 rounded-xl text-sm">Search</button>
+      </div>
+      <template x-if="walletError"><p class="mt-3 text-sm text-red-400" x-text="walletError"></p></template>
+      <template x-if="walletResult">
+        <div class="mt-4 p-4 bg-slate-950 border border-amber-500/30 rounded-xl space-y-3">
+          <div class="flex justify-between items-start gap-2 flex-wrap">
+            <div>
+              <p class="text-xs text-amber-400 font-medium" x-text="t('walletResult')"></p>
+              <p class="text-sm font-mono text-white mt-0.5 break-all">
+                <span x-text="walletResult.address"></span>
+                <a :href="explorerAccount(walletResult.address)" target="_blank" rel="noopener" class="text-amber-400 text-xs ml-2 hover:underline">Explorer ↗</a>
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <button @click="saveWatched(walletResult.address)" class="bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs px-3 py-1.5 rounded-lg border border-amber-500/20">+ <span x-text="t('watch')"></span></button>
+              <button @click="runAnalyze('wallet')" class="bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs px-3 py-1.5 rounded-lg border border-emerald-500/20" x-text="lang==='vi'?'Phân tích':'Analyze'"></button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            <div class="bg-slate-900 p-3 rounded-lg"><p class="text-[11px] text-slate-400" x-text="t('available')"></p><p class="text-base font-bold text-emerald-400" x-text="walletResult.balance"></p></div>
+            <div class="bg-slate-900 p-3 rounded-lg"><p class="text-[11px] text-slate-400" x-text="t('locked')"></p><p class="text-base font-bold text-amber-300" x-text="walletResult.lockedBalance"></p></div>
+            <div class="bg-slate-900 p-3 rounded-lg"><p class="text-[11px] text-slate-400" x-text="t('subentries')"></p><p class="text-base font-bold text-white" x-text="walletResult.subentryCount ?? '—'"></p></div>
+            <div class="bg-slate-900 p-3 rounded-lg"><p class="text-[11px] text-slate-400" x-text="t('lastMod')"></p><p class="text-base font-bold text-white" x-text="walletResult.lastModified ? walletResult.lastModified.slice(0,10) : '—'"></p></div>
+          </div>
+          <p class="text-[11px] text-slate-400" x-show="walletResult.claimableCount != null" x-text="(lang==='vi'?'Claimable balances: ':'Claimable balances: ')+(walletResult.claimableCount||0)"></p>
+          <template x-if="walletResult.otherAssets && walletResult.otherAssets.length">
+            <div class="text-[11px] text-slate-400">
+              <p class="mb-1" x-text="lang==='vi'?'Asset khác:':'Other assets:'"></p>
+              <template x-for="oa in walletResult.otherAssets" :key="(oa.code||'')+(oa.issuer||'')">
+                <p class="font-mono text-amber-300/90" x-text="(oa.balance||'')+' '+(oa.code||'')"></p>
+              </template>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-sm font-semibold text-slate-200" x-text="t('latestBlocks')"></h2>
+          <span class="text-xs text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg">Live</span>
+        </div>
+        <div class="space-y-2.5 overflow-y-auto max-h-[380px]">
+          <template x-for="b in blocks" :key="b.height">
+            <div class="bg-slate-950 border border-slate-800/60 p-3 rounded-xl flex justify-between items-center">
+              <div>
+                <span class="font-bold text-amber-400 text-sm" x-text="'#' + b.height"></span>
+                <span class="text-[11px] text-slate-400 font-mono ml-2" x-text="(b.hash||'').substring(0,12)+'...'"></span>
+                <p class="text-[11px] text-slate-500 mt-0.5" x-text="(b.opCount||0)+' ops'"></p>
+              </div>
+              <div class="text-right">
+                <span class="text-xs font-medium text-emerald-400" x-text="b.txCount+' Tx'"></span>
+                <p class="text-[10px] text-slate-500 mt-1" x-text="b.time"></p>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div class="space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <h2 class="text-sm font-semibold text-slate-200 mb-4" x-text="t('recentTx')"></h2>
+          <div class="space-y-2.5 overflow-y-auto max-h-[220px]">
+            <template x-for="tx in transactions" :key="tx.id || tx.txid">
+              <div class="bg-slate-950 border border-slate-800/60 p-2.5 rounded-xl flex justify-between gap-2">
+                <div class="min-w-0 text-xs font-mono text-amber-300">
+                  <button type="button" class="hover:underline" @click="openAddress(tx.sender)" x-text="shortAddr(tx.sender)"></button>
+                  <span> → </span>
+                  <button type="button" class="hover:underline" @click="openAddress(tx.receiver)" x-text="shortAddr(tx.receiver)"></button>
+                  <p class="text-[10px] text-slate-500 mt-0.5">
+                    <span x-text="tx.time"></span>
+                    <a :href="explorerTx(tx.txid)" target="_blank" rel="noopener" class="text-amber-400/80 hover:underline ml-1" x-show="tx.txid">↗</a>
+                  </p>
+                </div>
+                <span class="text-xs font-bold text-white whitespace-nowrap" x-text="tx.amount"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+          <h2 class="text-sm font-semibold text-slate-200 mb-3" x-text="t('watched')"></h2>
+          <div class="space-y-2 max-h-[150px] overflow-y-auto">
+            <template x-for="w in watchedWallets" :key="w.id">
+              <div class="bg-slate-950 border border-slate-800 px-3 py-2 rounded-xl flex justify-between items-center">
+                <div class="cursor-pointer" @click="searchQuery=w.address; lookupWallet()">
+                  <p class="text-xs font-mono text-amber-400" x-text="(w.address||'').substring(0,16)+'...'"></p>
+                  <p class="text-[10px] text-slate-500" x-text="(w.alias||'')+' ('+(w.network||'')+')'"></p>
+                </div>
+                <button @click="removeWatched(w.id)" class="text-red-400 text-xs px-2" x-text="t('remove')"></button>
+              </div>
+            </template>
+            <template x-if="watchedWallets.length===0">
+              <p class="text-xs text-slate-500 text-center py-2" x-text="t('noWatched')"></p>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+
+    <!-- Saved reports (the old "Saved pairs" card was removed: it only stored a name and nothing used it) -->
+    <div class="grid grid-cols-1 gap-6" x-show="!simpleMode">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+        <h2 class="text-sm font-semibold text-slate-200 mb-3" x-text="t('reportsTitle')"></h2>
+        <p class="text-[11px] text-slate-500 mb-2" x-text="t('reportsHint')"></p>
+        <div class="space-y-1.5 max-h-40 overflow-y-auto">
+          <template x-for="rp in reports" :key="rp.id">
+            <div class="bg-slate-950 border border-slate-800 px-2.5 py-2 rounded-lg text-xs">
+              <div class="flex justify-between gap-2">
+                <button type="button" class="text-left text-amber-300 hover:underline font-medium truncate" @click="showReport(rp)" x-text="rp.title"></button>
+                <button @click="removeReport(rp.id)" class="text-red-400 text-[10px] shrink-0" x-text="t('remove')"></button>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-0.5" x-text="(rp.created_at||'').toString().slice(0,19)"></p>
+            </div>
+          </template>
+          <template x-if="!reports.length"><p class="text-[11px] text-slate-500" x-text="t('noReports')"></p></template>
+        </div>
+        <template x-if="activeReport">
+          <div class="mt-3 p-3 bg-slate-950 border border-amber-500/20 rounded-xl text-xs whitespace-pre-wrap max-h-48 overflow-y-auto" x-text="activeReport.answer"></div>
+        </template>
+      </div>
+    </div>
+
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg" x-show="!simpleMode">
+      <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+        <h2 class="text-sm font-semibold text-slate-200" x-text="t('alertsTitle')"></h2>
+        <div class="flex gap-2 flex-wrap">
+          <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-amber-300" @click="addAlertRule('network_status')" x-text="t('alertNet')"></button>
+          <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-amber-300" @click="addAlertRule('capacity_high')" x-text="t('alertCap')"></button>
+          <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-amber-300" @click="addAlertRule('ledger_stalled')" x-text="t('alertStall')"></button>
+          <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-amber-300" @click="addAlertRule('trade_activity')" x-text="t('alertTrade')"></button>
+          <button type="button" class="text-[10px] bg-slate-800 px-2 py-1 rounded-lg text-amber-300" @click="addWalletAlert()" x-text="t('alertWallet')"></button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div class="space-y-1 max-h-36 overflow-y-auto">
+          <p class="text-slate-500" x-text="t('alertRules')"></p>
+          <template x-for="ar in alertRules" :key="ar.id">
+            <div class="bg-slate-950 border border-slate-800 px-2 py-1.5 rounded-lg flex justify-between gap-2">
+              <span class="text-amber-300" x-text="(ar.name||ar.kind)+' · '+(ar.network||'')"></span>
+              <button class="text-red-400 text-[10px]" @click="removeAlertRule(ar.id)" x-text="t('remove')"></button>
+            </div>
+          </template>
+          <p class="text-slate-600" x-show="!alertRules.length" x-text="t('noAlertRules')"></p>
+        </div>
+        <div class="space-y-1 max-h-36 overflow-y-auto">
+          <p class="text-slate-500" x-text="t('alertEvents')"></p>
+          <template x-for="ev in alertEvents" :key="ev.id">
+            <div class="bg-slate-950 border border-slate-800 px-2 py-1.5 rounded-lg">
+              <p class="text-slate-300" x-text="ev.message"></p>
+              <p class="text-[10px] text-slate-600" x-text="ev.created_at"></p>
+            </div>
+          </template>
+          <p class="text-slate-600" x-show="!alertEvents.length" x-text="t('noAlertEvents')"></p>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg" x-show="!simpleMode">
+      <div class="flex flex-wrap justify-between gap-2 mb-3">
+        <h2 class="text-sm font-semibold text-slate-200" x-text="t('dashTitle')"></h2>
+        <button type="button" class="text-[10px] bg-amber-500 text-slate-950 font-semibold px-3 py-1 rounded-lg" @click="saveDashboard()" x-text="t('dashSave')"></button>
+      </div>
+      <p class="text-[11px] text-slate-500 mb-2" x-text="t('dashHint')"></p>
+      <div class="flex flex-wrap gap-2 mb-3">
+        <label class="text-[10px] text-slate-400 flex items-center gap-1"><input type="checkbox" x-model="dashSel.height" class="rounded"> Height</label>
+        <label class="text-[10px] text-slate-400 flex items-center gap-1"><input type="checkbox" x-model="dashSel.fee" class="rounded"> Fee</label>
+        <label class="text-[10px] text-slate-400 flex items-center gap-1"><input type="checkbox" x-model="dashSel.capacity" class="rounded"> Capacity</label>
+        <label class="text-[10px] text-slate-400 flex items-center gap-1"><input type="checkbox" x-model="dashSel.activity" class="rounded"> Activity</label>
+        <label class="text-[10px] text-slate-400 flex items-center gap-1"><input type="checkbox" x-model="dashSel.observe" class="rounded"> Observe</label>
+      </div>
+      <div class="space-y-1 max-h-28 overflow-y-auto text-xs">
+        <template x-for="d in dashboards" :key="d.id">
+          <div class="bg-slate-950 border border-slate-800 px-2 py-1.5 rounded-lg flex justify-between">
+            <button type="button" class="text-left text-amber-300 hover:underline" @click="loadDashboard(d)" x-text="d.name+' ('+(d.widgets||[]).join(', ')+')'"></button>
+            <button class="text-red-400 text-[10px]" @click="removeDashboard(d.id)" x-text="t('remove')"></button>
+          </div>
+        </template>
+        <p class="text-slate-600" x-show="!dashboards.length" x-text="t('noDash')"></p>
+      </div>
+    </div>
+
+  <footer class="bg-slate-900 border-t border-slate-800 py-4 mt-8 text-center text-xs text-slate-500">
+    PiChain Monitor · Official Horizon API · Universal AI + Feedback
+  </footer>
+
+<!-- Single AI FAB — robot icon + unread badge -->
+    <button type="button" class="ai-fab" id="aiFab" title="AI · Feedback · Settings" aria-label="AI">
+      <img src="/ai-icon.png" alt="AI" class="ai-fab-img">
+      <span class="ai-fab-dot" id="aiStatusDot"></span>
+      <span class="ai-badge" id="aiBadge" hidden style="display:none"></span>
+    </button>
+  </div>
+
+  <!-- Unified AI Panel: Chat | Feedback | Settings | Logs -->
+  <div class="panel-overlay" id="aiOverlay" hidden style="z-index:400">
+    <div class="panel ai-panel" id="aiPanel">
+      <div class="panel-header">
+        <span class="panel-title">✦ AI</span>
+        <button type="button" class="panel-close" id="aiClose" aria-label="Close">×</button>
+      </div>
+      <div class="panel-tabs" id="panelTabs">
+        <button type="button" class="tab active" data-tab="chat">Chat</button>
+        <button type="button" class="tab" data-tab="feedback">Feedback <span class="tab-badge" id="fbTabBadge" hidden></span></button>
+        <button type="button" class="tab" data-tab="settings">Settings</button>
+        <button type="button" class="tab" data-tab="logs">Logs</button>
+      </div>
+
+      <!-- Chat tab -->
+      <div class="tab-pane active" id="tab-chat">
+        <div class="panel-body" id="aiChat"></div>
+        <div class="panel-footer">
+          <input type="text" id="aiInput" placeholder="Ask about Pi network, wallet, chart…" autocomplete="off" enterkeyhint="send">
+          <button type="button" id="aiSend" aria-label="Send">➤</button>
+        </div>
+        <div class="ai-status-bar" id="aiStatusBar">AI: checking…</div>
+      </div>
+
+      <!-- Feedback tab -->
+      <div class="tab-pane" id="tab-feedback">
+        <div class="panel-body fb-body">
+          <div id="fbNotices" class="fb-notices"></div>
+          <div id="fbDonate" class="fb-donate" hidden></div>
+          <label class="fb-label">Type</label>
+          <select id="fbType">
+            <option value="improvement">Improvement</option>
+            <option value="bug">Bug</option>
+            <option value="question">Question</option>
+          </select>
+          <label class="fb-label">Rating</label>
+          <div class="fb-stars" id="fbStars">
+            <button type="button" data-r="1">★</button>
+            <button type="button" data-r="2">★</button>
+            <button type="button" data-r="3">★</button>
+            <button type="button" data-r="4">★</button>
+            <button type="button" data-r="5">★</button>
+          </div>
+          <label class="fb-label">Message</label>
+          <textarea id="fbMessage" rows="3" placeholder="Your feedback…" maxlength="2000"></textarea>
+          <p class="fb-hint">Chỉ gửi nội dung bạn nhập. Không cần mật khẩu / API key.</p>
+          <button type="button" class="fb-submit" id="fbSubmit">Send Feedback</button>
+          <p class="fb-status" id="fbStatus"></p>
+        </div>
+      </div>
+
+      <!-- Settings tab -->
+      <div class="tab-pane" id="tab-settings">
+        <div class="panel-body settings-body">
+          <label class="fb-label">Provider</label>
+          <select id="setProvider">
+            <option value="none">— None —</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Google Gemini</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="groq">Groq</option>
+            <option value="mistral">Mistral</option>
+            <option value="xai">xAI</option>
+            <option value="custom">Custom OpenAI-compatible</option>
+            <option value="local">Local OpenAI-compatible</option>
+          </select>
+          <label class="fb-label">API Key</label>
+          <input type="password" id="setApiKey" placeholder="sk-… (không hiện lại sau khi lưu)" autocomplete="off">
+          <p class="fb-hint" id="setKeyHint">Key hiện tại: (chưa có)</p>
+          <label class="fb-label">Base URL <small>(bắt buộc cho Custom / Local)</small></label>
+          <input type="text" id="setBaseUrl" placeholder="https://api.example.com/v1">
+          <label class="fb-label">Model</label>
+          <input type="text" id="setModel" placeholder="auto" value="auto">
+          <label class="fb-label">Mode</label>
+          <select id="setMode">
+            <option value="cloud_enabled">Cloud Enabled</option>
+            <option value="prefer_local">Prefer Local</option>
+            <option value="local_only">Local Only</option>
+            <option value="balanced">Balanced</option>
+            <option value="custom">Custom</option>
+          </select>
+          <div class="row" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+            <button type="button" class="fb-submit" id="setSave">Save Settings</button>
+            <button type="button" class="ws-btn" id="setTest">Check token</button>
+            <button type="button" class="ws-btn" id="setModels">Load models</button>
+          </div>
+          <p class="fb-status" id="setStatus"></p>
+          <p class="fb-hint" id="setModelsHint"></p>
+        </div>
+      </div>
+
+      <!-- Logs tab -->
+      <div class="tab-pane" id="tab-logs">
+        <div class="panel-body logs-body">
+          <div class="logs-toolbar">
+            <button type="button" class="ws-btn" id="logsRefresh">Refresh</button>
+            <button type="button" class="ws-btn" id="logsClear">Clear</button>
+          </div>
+          <pre id="logsView" class="logs-view">Loading…</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  
+
+
+  <script>
+    const I18N = {
+      en: {
+        subtitle:'Watch the Pi blockchain — simple & live', blockHeight:'Network height', liveUpdate:'⚡ Live data',
+        protocol:'Protocol', capacity:'Network load', ledgerUsage:'How busy the network is', avgFee:'Typical fee', baseFee:'From live network data',
+        dataFrom:'Data from', activityChart:'Recent activity', lookupTitle:'Look up a wallet',
+        lookupPlaceholder:'Paste address starting with G or M', walletResult:'Wallet result', watch:'Watch',
+        available:'Available balance', locked:'Locked / other', subentries:'Subentries', lastMod:'Last modified',
+        latestBlocks:'Latest blocks', recentTx:'Recent transfers', watched:'Watched wallets', remove:'Remove',
+        noWatched:'No wallets pinned yet.', loading:'Loading…',
+        assetsTitle:'Assets · Trades · Pools', viewOnly:'View only · no login',
+        testnetNote:'Testnet tokens & DEX have no real value — for observation only.',
+        topAssets:'Tokens with holders', recentTrades:'Recent trades · tap a pair', pools:'Liquidity pools',
+        noTrades:'No recent trades', noPools:'No pools listed',
+        tapTrade:'Tap a pair to open chart', pairChart:'Price chart', pairChartNote:'Drag to pan, pinch/scroll to zoom, tap for details. Real Horizon trades only. Testnet = no real value.', pairsHint:'Enter a token code and its issuer (G…) plus PI or another token, or tap a pair in Recent trades.',
+        close:'Close', noChartData:'No chart data for this pair on Horizon yet.',
+        pairsTitle:'Saved pairs', addPair:'Watch', noPairs:'No saved pairs yet',
+        reportsTitle:'Saved AI reports', reportsHint:'In AI Chat: ask anything, then say “save report” or use Save in panel context.',
+        noReports:'No saved reports yet',
+        sourcesTitle:'Technical status (optional)', sourcesHint:'Live Horizon endpoints — features only if green.',
+        notProbed:'Not probed yet',
+        loadPair:'Load pair book',
+        liveOn:'Live', liveWait:'Connecting…', liveOff:'Offline',
+        dataOk:'Live data from the network', dataBad:'No live data right now — figures may be old',
+        easyTip:'Easy mode shows the key numbers only. Switch to Pro for charts, wallets and tools.',
+        noAssets:'No tokens with holders found on this network yet.',
+        exportMd:'Export .md', alertTrade:'Alert: trade activity', alertWallet:'Alert: wallet change',
+        cBase:'Token code (or PI)', cIssuer:'Issuer G… (tokens)', cCounter:'Quote (PI or token)', openChart:'Open chart', pickPair:'Trading pair', pickPairPh:'— Select a pair —', noPairsAvail:'No pairs from recent trades yet (try Testnet).',
+        moreTools:'Customize', hideTools:'Hide options',
+        timeframe:'Timeframe', chartType:'Chart type', tCandles:'Candles', tHollow:'Hollow candles', tOhlc:'OHLC bars', tHeikin:'Heikin-Ashi', tLine:'Line', tArea:'Area',
+        volume:'Volume', indicators:'Indicators', indOverlay:'On the chart', indPane:'Separate panel',
+        indNote:'Calculated from the loaded candles (derived, not on-chain). Not investment advice.',
+        resetView:'Reset view', savePng:'Save as PNG', refresh:'Refresh',
+        chartMetaTip:'Source: Horizon /trade_aggregations. Missing candles mean no trades happened in that period.',
+        derivedFrom:'built from', updated:'updated', gapNote:'empty gaps = no trades', analyzeNet:'Analyze network', analyzeTrades:'Analyze trades',
+        taBtn:'Tech analysis', taTitle:'Technical analysis', taNeedMore:'Not enough candle history on Horizon for full indicators.',
+        taLast:'Last', taChange:'Change', taTrend:'Trend',
+        modeSimple:'Easy', modePro:'More tools', issuerPh:'Issuer G… (optional)',
+        alertsTitle:'Alerts', alertNet:'Rule: network status', alertCap:'Rule: high capacity', alertStall:'Rule: stalled',
+        alertRules:'Rules', alertEvents:'Recent events', noAlertRules:'No rules yet', noAlertEvents:'No events',
+        exportJson:'Export JSON',
+        observeTitle:'Ask about the network', observeHint:'Works even without an AI key. Answers use real network data.',
+        observePh:'Example: Network summary · or paste a wallet',
+        observeGo:'Ask', obsNet:'Network', obsTrades:'Trades',
+        evidence:'Evidence', unverified:'Some figures could not be verified against evidence',
+        candles:'Candles (1h agg)',
+        dashTitle:'My dashboard', dashSave:'Save board', dashHint:'Pick widgets to remember (Pro).', noDash:'No boards yet'
+      },
+      vi: {
+        subtitle:'Xem blockchain Pi — đơn giản & trực tiếp', blockHeight:'Chiều cao mạng', liveUpdate:'⚡ Dữ liệu trực tiếp',
+        protocol:'Protocol', capacity:'Tải mạng', ledgerUsage:'Mạng đang bận tới mức nào', avgFee:'Phí thường gặp', baseFee:'Lấy từ dữ liệu mạng',
+        dataFrom:'Dữ liệu từ', activityChart:'Hoạt động gần đây', lookupTitle:'Tra cứu ví',
+        lookupPlaceholder:'Dán địa chỉ bắt đầu bằng G hoặc M', walletResult:'Kết quả tra cứu ví', watch:'Theo dõi',
+        available:'Số dư khả dụng', locked:'Khóa / khác', subentries:'Subentries', lastMod:'Cập nhật lần cuối',
+        latestBlocks:'Khối mới nhất', recentTx:'Chuyển khoản gần đây', watched:'Ví đang theo dõi', remove:'Xóa',
+        noWatched:'Chưa có ví nào được ghim.', loading:'Đang tải…',
+        assetsTitle:'Tài sản · Giao dịch · Pool', viewOnly:'Chỉ xem · không cần đăng nhập',
+        testnetNote:'Token & DEX trên Testnet không có giá trị thật — chỉ để quan sát.',
+        topAssets:'Token có holder', recentTrades:'Giao dịch gần đây · bấm cặp', pools:'Liquidity pools',
+        noTrades:'Chưa có trade gần đây', noPools:'Chưa có pool',
+        tapTrade:'Bấm một cặp để xem biểu đồ', pairChart:'Biểu đồ giá', pairChartNote:'Kéo để dịch, chụm/cuộn để phóng to, chạm để xem chi tiết. Chỉ dùng giao dịch Horizon thật. Testnet không có giá trị thật.', pairsHint:'Nhập mã token và issuer (G…) cùng PI hoặc token khác, hoặc bấm một cặp trong Giao dịch gần đây.',
+        close:'Đóng', noChartData:'Chưa có dữ liệu biểu đồ cho cặp này trên Horizon.',
+        pairsTitle:'Cặp đã lưu', addPair:'Theo dõi', noPairs:'Chưa lưu cặp nào',
+        reportsTitle:'Báo cáo AI đã lưu', reportsHint:'Trong Chat AI: hỏi xong, gõ “lưu báo cáo” để lưu lại dùng sau.',
+        noReports:'Chưa có báo cáo lưu',
+        sourcesTitle:'Trạng thái kỹ thuật (tuỳ chọn)', sourcesHint:'Endpoint Horizon live — chỉ dùng khi xanh.',
+        notProbed:'Chưa probe',
+        loadPair:'Tải order book',
+        liveOn:'Trực tiếp', liveWait:'Đang kết nối…', liveOff:'Mất kết nối',
+        dataOk:'Dữ liệu trực tiếp từ mạng', dataBad:'Chưa có dữ liệu trực tiếp — số liệu có thể đã cũ',
+        easyTip:'Chế độ Đơn giản chỉ hiện số liệu chính. Chuyển sang Chuyên sâu để xem biểu đồ, ví và công cụ.',
+        noAssets:'Chưa tìm thấy token nào có người nắm giữ trên mạng này.',
+        exportMd:'Xuất .md', alertTrade:'Cảnh báo: giao dịch', alertWallet:'Cảnh báo: biến động ví',
+        cBase:'Mã token (hoặc PI)', cIssuer:'Issuer G… (token)', cCounter:'Đối ứng (PI hoặc token)', openChart:'Mở biểu đồ', pickPair:'Cặp giao dịch', pickPairPh:'— Chọn một cặp —', noPairsAvail:'Chưa có cặp từ giao dịch gần đây (thử Testnet).',
+        moreTools:'Tùy chỉnh', hideTools:'Ẩn tùy chọn',
+        timeframe:'Khung thời gian', chartType:'Kiểu biểu đồ', tCandles:'Nến', tHollow:'Nến rỗng', tOhlc:'Thanh OHLC', tHeikin:'Heikin-Ashi', tLine:'Đường', tArea:'Vùng',
+        volume:'Khối lượng', indicators:'Chỉ báo', indOverlay:'Trên biểu đồ', indPane:'Khung riêng',
+        indNote:'Tính từ các nến đã tải (suy ra, không phải dữ liệu on-chain). Không phải lời khuyên đầu tư.',
+        resetView:'Đặt lại khung nhìn', savePng:'Lưu ảnh PNG', refresh:'Làm mới',
+        chartMetaTip:'Nguồn: Horizon /trade_aggregations. Thiếu nến nghĩa là không có giao dịch trong khoảng đó.',
+        derivedFrom:'gộp từ', updated:'cập nhật', gapNote:'khoảng trống = không có giao dịch', analyzeNet:'Phân tích mạng', analyzeTrades:'Phân tích trade',
+        taBtn:'Phân tích KT', taTitle:'Phân tích kỹ thuật', taNeedMore:'Chưa đủ lịch sử nến trên Horizon để tính đủ chỉ báo.',
+        taLast:'Giá cuối', taChange:'Biến động', taTrend:'Xu hướng',
+        modeSimple:'Dễ dùng', modePro:'Thêm công cụ', issuerPh:'Issuer G… (tuỳ chọn)',
+        alertsTitle:'Cảnh báo', alertNet:'Luật: trạng thái mạng', alertCap:'Luật: capacity cao', alertStall:'Luật: ledger dừng',
+        alertRules:'Luật', alertEvents:'Sự kiện gần đây', noAlertRules:'Chưa có luật', noAlertEvents:'Chưa có sự kiện',
+        exportJson:'Xuất JSON',
+        observeTitle:'Hỏi về mạng Pi', observeHint:'Vẫn dùng được khi chưa có API key AI. Trả lời từ dữ liệu mạng thật.',
+        observePh:'Ví dụ: Tóm tắt mạng · hoặc dán địa chỉ ví',
+        observeGo:'Hỏi', obsNet:'Mạng', obsTrades:'Trade',
+        evidence:'Bằng chứng', unverified:'Một số số liệu chưa khớp evidence',
+        candles:'Nến (agg 1h)',
+        dashTitle:'Bảng của tôi', dashSave:'Lưu bảng', dashHint:'Chọn widget để nhớ (Chuyên sâu).', noDash:'Chưa có bảng'
+      }
+    };
+    let chartInstance = null;
+    function piMonitor() {
+      return {
+        network: 'mainnet',
+        lang: localStorage.getItem('pichain_lang') || ((navigator.language||'').startsWith('vi') ? 'vi' : 'en'),
+        stats: {}, blocks: [], transactions: [], trends: null, trendSummary: '',
+        searchQuery: '', walletResult: null, walletError: null, watchedWallets: [], assets: [], trades: [], pools: [], pairs: [], reports: [], pairLeft: '', pairRight: 'PI', activeReport: null, sources: {}, snapshotNote: '', pairDetail: null, pairDetailError: null, analyzeResult: null, simpleMode: localStorage.getItem('pichain_simple')!=='0', pairIssuer: '', alertRules: [], alertEvents: [], sparkPoints: [], observeQ: '', observeResult: null, dashboards: [], dashSel: { height: true, fee: true, capacity: false, activity: true, observe: false }, priceInfo: null, sseOk: null, activeDash: null, pairTa: null, selectedPairLabel: '', selectedBase: '', selectedCounter: '', selectedBaseIssuer: null, selectedCounterIssuer: null,
+        cBase: '', cBaseIssuer: '', cCounter: 'PI', cCounterIssuer: '',
+        pairTf: '1h', pairType: 'candles', pairVol: true, indMenu: false, showChartTools: false, availablePairs: [], pickedPairKey: '', pairLoading: false, pairCandleError: null, pairCandleMeta: null,
+        pairInd: { sma: true, ema: false, bb: false, vwap: false, rsi: false, macd: false, stoch: false },
+        tfList: [{id:'1m',label:'1m'},{id:'5m',label:'5m'},{id:'15m',label:'15m'},{id:'30m',label:'30m'},{id:'1h',label:'1H'},{id:'4h',label:'4H'},{id:'1d',label:'1D'},{id:'1w',label:'1W'},{id:'1M',label:'1M'}],
+        indOverlay: [{id:'sma',label:'SMA 20',color:'#fbbf24'},{id:'ema',label:'EMA 50',color:'#60a5fa'},{id:'bb',label:'Bollinger 20·2',color:'#a78bfa'},{id:'vwap',label:'VWAP',color:'#f472b6'}],
+        indPane: [{id:'rsi',label:'RSI 14',color:'#a78bfa'},{id:'macd',label:'MACD 12·26·9',color:'#38bdf8'},{id:'stoch',label:'Stochastic 14·3',color:'#fb923c'}],
+        _cSeq: 0, _candles: [], _tfMs: 3600000, _candleKey: '', _sseLast: 0,
+        get liveConnected(){
+          if (this.sseOk === true) return true;
+          const h = this.stats && this.stats.height;
+          const v = h && (typeof h === 'object' ? h.value : h);
+          return v != null && v !== '' && v !== '—' && !this.stats.error;
+        },
+        get liveState(){
+          if (this.sseOk === true || this.liveConnected) return 'live';
+          if (this.sseOk === null && !this.stats?.height) return 'wait';
+          if (this.sseOk === false && !this.liveConnected) return 'off';
+          return this.liveConnected ? 'live' : 'off';
+        },
+        liveTitle(){ return this.liveState==='live' ? this.t('liveOn') : (this.liveState==='wait' ? this.t('liveWait') : this.t('liveOff')); },
+        t(key){ return (I18N[this.lang]||I18N.en)[key]||key; },
+        fmtMeta(m){
+          if (m == null || m === '') return '—';
+          if (typeof m === 'object' && m.display != null) return m.display || '—';
+          if (typeof m === 'object' && m.value != null) return String(m.value);
+          return String(m);
+        },
+        setLang(l){ this.lang=l; localStorage.setItem('pichain_lang',l); document.documentElement.lang=l; },
+        init(){
+          document.documentElement.lang = this.lang;
+          window.__pichainCtx = () => ({
+            screen: 'home',
+            network: this.network,
+            lang: this.lang,
+            hasWallet: !!this.walletResult,
+            height: this.stats.height || null
+          });
+          try { const pf = JSON.parse(localStorage.getItem('pichain_chart') || '{}');
+            if (pf.tf && this.tfList.some(f => f.id === pf.tf)) this.pairTf = pf.tf;
+            if (['candles','hollow','ohlc','heikin','line','area'].includes(pf.type)) this.pairType = pf.type;
+            if (typeof pf.vol === 'boolean') this.pairVol = pf.vol;
+            if (pf.ind && typeof pf.ind === 'object') Object.keys(this.pairInd).forEach(k => { if (typeof pf.ind[k] === 'boolean') this.pairInd[k] = pf.ind[k]; });
+          } catch (e) {}
+          this.fetchAll();
+          this.startSse();
+          setInterval(() => this.fetchAll(), 15000);
+          // Live badge: red if no SSE message for 45s (EventSource may stay "open" while the upstream is dead)
+          setInterval(() => { if (this.sseOk === true && Date.now() - this._sseLast > 45000) this.sseOk = false; }, 5000);
+          // Keep the open pair chart fresh (same pair/timeframe keeps your zoom position)
+          setInterval(() => { if (this.selectedBase && !document.hidden) this.loadCandles(true); }, 20000);
+        },
+        setNetwork(net){ this.network=net; this.walletResult=null; this.walletError=null; this.fetchAll(); this.startSse(); },
+        fetchAll(){
+          fetch('/api/stats?network='+this.network).then(r=>r.json()).then(d=>{ if(!d.error) this.stats=d; }).catch(()=>{});
+          fetch('/api/blocks?network='+this.network).then(r=>r.json()).then(d=>{ this.blocks=Array.isArray(d)?d:[]; }).catch(()=>{});
+          fetch('/api/transactions?network='+this.network).then(r=>r.json()).then(d=>{ this.transactions=Array.isArray(d)?d:[]; }).catch(()=>{});
+          fetch('/api/trends?network='+this.network).then(r=>r.json()).then(d=>{
+            this.trends=d;
+            if(d.summary) this.trendSummary = (this.lang==='vi'?`${d.summary.ledgers} ledger · TB ${d.summary.avgTxPerLedger} tx`:`${d.summary.ledgers} ledgers · avg ${d.summary.avgTxPerLedger} tx`);
+            this.$nextTick(()=>this.renderChart(d.points||[]));
+          }).catch(()=>{});
+          this.fetchWatched();
+          fetch('/api/assets?network='+this.network).then(r=>r.json()).then(d=>{
+            const all = d.assets||[];
+            this.assets = all.filter(a => Number(a.holders||a.numAccounts||a.holdersAuthorized||0) > 0);
+          }).catch(()=>{});
+          fetch('/api/trades?network='+this.network).then(r=>r.json()).then(d=>{
+            this.trades=d.trades||[];
+            this.buildAvailablePairs();
+          }).catch(()=>{});
+          fetch('/api/pools?network='+this.network).then(r=>r.json()).then(d=>{ this.pools=d.pools||[]; }).catch(()=>{});
+          this.fetchReports();
+          this.fetchSources();
+          this.fetchAlerts();
+          this.fetchDashboards();
+          fetch('/api/v2/price').then(r=>r.json()).then(d=>{ this.priceInfo = d; }).catch(()=>{});
+          fetch('/api/v2/snapshots?network='+this.network+'&limit=24').then(r=>r.json()).then(d=>{ this.sparkPoints = d.points||[]; }).catch(()=>{});
+        },
+        renderChart(points){
+          const canvas=document.getElementById('activityChart');
+          if(!canvas||typeof Chart==='undefined') return;
+          if(chartInstance) chartInstance.destroy();
+          chartInstance=new Chart(canvas,{
+            type:'bar',
+            data:{ labels:points.map(p=>p.label||p.height), datasets:[{ label:'Tx', data:points.map(p=>p.tx), backgroundColor:'rgba(245,158,11,0.55)', borderColor:'rgba(245,158,11,0.9)', borderWidth:1, borderRadius:4 }] },
+            options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}, scales:{ x:{ticks:{color:'#94a3b8',maxRotation:0,font:{size:10}},grid:{color:'rgba(51,65,85,0.4)'}}, y:{beginAtZero:true,ticks:{color:'#94a3b8',font:{size:10}},grid:{color:'rgba(51,65,85,0.4)'}} } }
+          });
+        },
+        lookupWallet(){
+          if(!this.searchQuery.trim()) return;
+          this.walletError=null; this.walletResult=null;
+          fetch('/api/wallet/'+encodeURIComponent(this.searchQuery.trim())+'?network='+this.network)
+            .then(async r=>{ const data=await r.json(); if(!r.ok||data.error) this.walletError=this.lang==='vi'?(data.error_vi||data.error):data.error; else this.walletResult=data; })
+            .catch(e=>{ this.walletError=e.message; });
+        },
+        fetchWatched(){ fetch('/api/watched').then(r=>r.json()).then(d=>this.watchedWallets=d||[]); },
+        saveWatched(address){
+          fetch('/api/watched',{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ address, network:this.network, alias:(this.lang==='vi'?'Ví ghim #':'Pinned #')+(this.watchedWallets.length+1) }) }).then(()=>this.fetchWatched());
+        },
+        removeWatched(id){ fetch('/api/watched/'+id,{method:'DELETE'}).then(()=>this.fetchWatched()); },
+        shortAddr(a){ if(!a||a==='—') return '—'; return a.length>12 ? a.slice(0,6)+'…'+a.slice(-4) : a; },
+        openAddress(a){
+          if(!a || a==='—' || a.length<10) return;
+          this.searchQuery = a;
+          this.lookupWallet();
+          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(e) {}
+        },
+        explorerTx(hash){
+          if(!hash) return '#';
+          const net = this.network === 'testnet' ? 'testnet' : 'mainnet';
+          return 'https://blockexplorer.minepi.com/'+net+'/transactions/'+encodeURIComponent(hash);
+        },
+        explorerAccount(a){
+          const net = this.network === 'testnet' ? 'testnet' : 'mainnet';
+          return 'https://blockexplorer.minepi.com/'+net+'/accounts/'+encodeURIComponent(a||'');
+        },
+        fetchReports(){ fetch('/api/reports').then(r=>r.json()).then(d=>this.reports=Array.isArray(d)?d:[]).catch(()=>{}); },
+        fmtNum(v){ if (v==null||v===''||Number.isNaN(Number(v))) return '—'; const n=Number(v); return n.toPrecision(6); },
+        trendLabel(tr){
+          if (tr==='up') return this.lang==='vi'?'Tăng':'Up';
+          if (tr==='down') return this.lang==='vi'?'Giảm':'Down';
+          if (tr==='sideways') return this.lang==='vi'?'Đi ngang':'Sideways';
+          return '—';
+        },
+        rsiLabel(z){
+          if (z==='overbought') return this.lang==='vi'?'Quá mua':'Overbought';
+          if (z==='oversold') return this.lang==='vi'?'Quá bán':'Oversold';
+          if (z==='neutral') return this.lang==='vi'?'Trung tính':'Neutral';
+          return '—';
+        },
+        analyzePairTa(base, counter){
+          const b = (base||this.selectedBase||this.pairLeft||'USDT').toString().trim().toUpperCase();
+          const c = (counter||this.selectedCounter||this.pairRight||'PI').toString().trim().toUpperCase();
+          this.pairTa = null;
+          const q = new URLSearchParams({ network: this.network, base: b, counter: c });
+          const bi = this.selectedBaseIssuer || (this.pairIssuer ? this.pairIssuer.trim() : null);
+          const ci = this.selectedCounterIssuer || null;
+          if (bi) q.set('base_issuer', bi);
+          if (ci) q.set('counter_issuer', ci);
+          fetch('/api/v2/pair/ta?'+q).then(async r => {
+            const d = await this.safeJson(r);
+            if (!r.ok || d.ok === false) { this.pairTa = { analysis: { pair: b+'/'+c, note: 'insufficient_history', sampleSize: 0, disclaimer: d.error||'error' } }; return; }
+            this.pairTa = d;
+            this.loadPair(b, c, bi, ci);
+          }).catch(e => { this.pairTa = { analysis: { pair: b+'/'+c, sampleSize: 0, disclaimer: e.message } }; });
+        },
+        async safeJson(res){
+          const text = await res.text();
+          try { return JSON.parse(text); }
+          catch (e) {
+            const tip = (text || '').trim().startsWith('<')
+              ? (this.lang==='vi' ? 'Máy chủ trả về HTML thay vì JSON (sai đường API hoặc proxy).' : 'Server returned HTML instead of JSON (API path or proxy issue).')
+              : (this.lang==='vi' ? 'Phản hồi không phải JSON.' : 'Response is not JSON.');
+            throw new Error(tip);
+          }
+        },
+        buildAvailablePairs(){
+          const map = new Map();
+          for (const tr of (this.trades || [])) {
+            if (!tr.pair) continue;
+            const key = [tr.base||'', tr.baseIssuer||'', tr.counter||'', tr.counterIssuer||''].join('|');
+            if (map.has(key)) {
+              const x = map.get(key);
+              if (tr.price) x.lastPrice = tr.price;
+              continue;
+            }
+            map.set(key, {
+              key,
+              label: tr.pair,
+              base: tr.base,
+              counter: tr.counter,
+              baseIssuer: tr.baseIssuer || null,
+              counterIssuer: tr.counterIssuer || null,
+              lastPrice: tr.price || null
+            });
+          }
+          this.availablePairs = Array.from(map.values()).slice(0, 80);
+        },
+        openPickedPair(){
+          const ap = (this.availablePairs || []).find(x => x.key === this.pickedPairKey);
+          if (!ap) return;
+          this.openTradePair({
+            pair: ap.label,
+            base: ap.base,
+            counter: ap.counter,
+            baseIssuer: ap.baseIssuer,
+            counterIssuer: ap.counterIssuer,
+            price: ap.lastPrice
+          });
+        },
+        openTradePair(tr){
+          if (!tr || !tr.pair) return;
+          const parts = String(tr.pair).split('/');
+          const base = (tr.base || parts[0] || 'PI').toString().trim();
+          const counter = (tr.counter || parts[1] || 'PI').toString().trim();
+          this.selectedBase = base;
+          this.selectedCounter = counter;
+          this.selectedBaseIssuer = tr.baseIssuer || null;
+          this.selectedCounterIssuer = tr.counterIssuer || null;
+          this.selectedPairLabel = base + ' / ' + counter;
+          this.pairTa = null;
+          this.pairDetailError = null;
+          this.pairType = 'candles';
+          this.pairVol = true;
+          if (!this.pairInd.sma) this.pairInd.sma = true;
+          this.showChartTools = false;
+          this.loadPair(base, counter, tr.baseIssuer, tr.counterIssuer);
+          this.$nextTick(() => {
+            const el = document.getElementById('pairPanel');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+        },
+        clearSelectedPair(){
+          this.selectedPairLabel = '';
+          this.selectedBase = '';
+          this.selectedCounter = '';
+          this.selectedBaseIssuer = null;
+          this.selectedCounterIssuer = null;
+          this.pairDetail = null;
+          this.pairDetailError = null;
+          this.pairTa = null;
+          this.pairCandleError = null; this.pairCandleMeta = null; this._candles = []; this._candleKey = '';
+          if (window.__proChart) { try { window.__proChart.destroy(); } catch(e) {} window.__proChart = null; window.__proChartEl = null; }
+        },
+        loadPair(base, counter, baseIssuer, counterIssuer){
+          this.pairDetail = null;
+          this.pairDetailError = null;
+          this.loadCandles(false);
+          const q = new URLSearchParams({ network: this.network, base: base||'PI', counter: counter||'PI' });
+          const bi = baseIssuer || this.selectedBaseIssuer || (this.pairIssuer ? this.pairIssuer.trim() : null);
+          const ci = counterIssuer || this.selectedCounterIssuer || null;
+          if (bi) q.set('base_issuer', bi);
+          if (ci) q.set('counter_issuer', ci);
+          fetch('/api/v2/pair?'+q).then(async r => {
+            const d = await this.safeJson(r);
+            if (!r.ok) { this.pairDetailError = d.error || d.note || 'error'; return; }
+            this.pairDetail = d;
+          }).catch(e => { this.pairDetailError = e.message; });
+        },
+        openCustomPair(){
+          const n = v => String(v || '').trim();
+          const native = v => ['PI','TPI','NATIVE'].includes(v.toUpperCase());
+          let b = n(this.cBase) || 'PI', c = n(this.cCounter) || 'PI';
+          if (native(b)) b = 'PI'; if (native(c)) c = 'PI';
+          const bi = native(b) ? null : (n(this.cBaseIssuer) || null), ci = native(c) ? null : (n(this.cCounterIssuer) || null);
+          this.selectedBase = b; this.selectedCounter = c; this.selectedBaseIssuer = bi; this.selectedCounterIssuer = ci;
+          this.selectedPairLabel = b + ' / ' + c; this.pairTa = null; this.pairDetailError = null;
+          this.loadPair(b, c, bi, ci);
+        },
+        // ---- market chart (canvas, local engine) ----
+        proHeight(){ return 300 + 74 * ['rsi','macd','stoch'].filter(k => this.pairInd[k]).length; },
+        indCount(){ return Object.keys(this.pairInd).filter(k => this.pairInd[k]).length; },
+        savePrefs(){ try { localStorage.setItem('pichain_chart', JSON.stringify({ tf: this.pairTf, type: this.pairType, vol: this.pairVol, ind: this.pairInd })); } catch(e) {} },
+        setTf(id){ this.pairTf = id; this.savePrefs(); this.loadCandles(false); },
+        toggleInd(k){ this.pairInd[k] = !this.pairInd[k]; this.chartOptsChanged(); },
+        chartOptsChanged(){
+          this.savePrefs();
+          this.$nextTick(() => { if (window.__proChart) { window.__proChart.setOptions({ type: this.pairType, volume: this.pairVol, ind: { ...this.pairInd } }); window.__proChart.resize(); } });
+        },
+        chartReset(){ if (window.__proChart) window.__proChart.resetView(); },
+        chartPng(){
+          if (!window.__proChart) return;
+          const a = document.createElement('a'); a.href = window.__proChart.toDataURL();
+          a.download = 'pichain-' + (this.selectedPairLabel || 'pair').replace(/[^A-Za-z0-9]+/g, '-') + '-' + this.pairTf + '.png'; a.click();
+        },
+        loadCandles(silent){
+          if (!this.selectedBase) return;
+          const q = new URLSearchParams({ network: this.network, base: this.selectedBase, counter: this.selectedCounter || 'PI', tf: this.pairTf, limit: '300' });
+          if (this.selectedBaseIssuer) q.set('base_issuer', this.selectedBaseIssuer);
+          if (this.selectedCounterIssuer) q.set('counter_issuer', this.selectedCounterIssuer);
+          const key = [this.network, this.selectedBase, this.selectedBaseIssuer, this.selectedCounter, this.selectedCounterIssuer, this.pairTf].join('|');
+          const seq = ++this._cSeq; const sameView = silent && key === this._candleKey;
+          if (!silent) { this.pairLoading = true; this.pairCandleError = null; }
+          fetch('/api/v2/pair/candles?' + q).then(async r => {
+            const d = await this.safeJson(r);
+            if (seq !== this._cSeq) return;
+            this.pairLoading = false;
+            if (!r.ok || d.ok === false) { if (!silent) { this.pairCandleError = d.error || 'error'; this._candles = []; this.drawPro(false, key); } return; }
+            this._candles = d.candles || []; this._tfMs = d.tfMs || this._tfMs;
+            this.pairCandleError = this._candles.length ? null : ((this.lang === 'vi' ? d.note_vi : d.note) || d.note || this.t('noChartData'));
+            this.pairCandleMeta = this._candles.length ? { count: d.candles.length, derivedFrom: d.derivedFrom || null, time: new Date().toLocaleTimeString() } : null;
+            this.drawPro(sameView, key);
+          }).catch(e => { if (seq !== this._cSeq) return; this.pairLoading = false; if (!silent) this.pairCandleError = e.message; });
+        },
+        drawPro(keepView, key){
+          this._candleKey = key;
+          this.$nextTick(() => {
+            const el = document.getElementById('proChart');
+            if (!el || !window.PiChart) return;
+            if (!window.__proChart || window.__proChartEl !== el) {
+              if (window.__proChart) { try { window.__proChart.destroy(); } catch(e) {} }
+              window.__proChart = window.PiChart.create(el); window.__proChartEl = el;
+            }
+            window.__proChart.setOptions({ type: this.pairType, volume: this.pairVol, ind: { ...this.pairInd } });
+            window.__proChart.setData(this._candles, this._tfMs, !!keepView);
+          });
+        },
+        runAnalyze(type){
+          this.analyzeResult = null;
+          const body = { type, network: this.network };
+          if (type === 'wallet' && this.walletResult?.address) body.address = this.walletResult.address;
+          fetch('/api/v2/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
+            .then(r => r.json()).then(d => { this.analyzeResult = d; })
+            .catch(e => { this.analyzeResult = { ok:false, error: e.message }; });
+        },
+        removeReport(id){ fetch('/api/reports/'+id,{method:'DELETE'}).then(()=>{ this.activeReport=null; this.fetchReports(); }); },
+        showReport(rp){ this.activeReport = rp; },
+        setMode(simple){ this.simpleMode = !!simple; localStorage.setItem('pichain_simple', simple ? '1' : '0'); },
+        exportAnalyze(){
+          if (!this.analyzeResult) return;
+          const blob = new Blob([JSON.stringify(this.analyzeResult, null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'pichain-analyze-'+Date.now()+'.json';
+          a.click();
+        },
+        fetchAlerts(){
+          fetch('/api/v2/alerts/rules').then(r=>r.json()).then(d=>this.alertRules=Array.isArray(d)?d:[]).catch(()=>{});
+          fetch('/api/v2/alerts/events').then(r=>r.json()).then(d=>this.alertEvents=Array.isArray(d)?d:[]).catch(()=>{});
+        },
+        addAlertRule(kind){
+          fetch('/api/v2/alerts/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,network:this.network,name:kind,params:{threshold:0.8}})})
+            .then(()=>this.fetchAlerts());
+        },
+        removeAlertRule(id){ fetch('/api/v2/alerts/rules/'+id,{method:'DELETE'}).then(()=>this.fetchAlerts()); },
+        candleH(c){
+          const v = Number(c.c || c.close || c.h || 0);
+          if (!v) return 8;
+          return Math.min(100, Math.max(8, (Math.log10(v + 1) / 3) * 100));
+        },
+        fetchDashboards(){ fetch('/api/v2/dashboards').then(r=>r.json()).then(d=>this.dashboards=Array.isArray(d)?d:[]).catch(()=>{}); },
+        saveDashboard(){
+          const widgets = Object.keys(this.dashSel).filter(k => this.dashSel[k]);
+          if (!widgets.length) return;
+          fetch('/api/v2/dashboards', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name: 'Board '+new Date().toISOString().slice(0,16), widgets }) })
+            .then(() => this.fetchDashboards());
+        },
+        removeDashboard(id){ fetch('/api/v2/dashboards/'+id,{method:'DELETE'}).then(()=>this.fetchDashboards()); },
+        loadDashboard(d){ this.activeDash = d; this.simpleMode = false; },
+        addWalletAlert(){
+          if (!this.walletResult?.address) return;
+          fetch('/api/v2/alerts/rules',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+            kind:'wallet_balance_change', network:this.network, name:'wallet-delta',
+            params:{ address: this.walletResult.address, minDelta: 0 }
+          })}).then(()=>this.fetchAlerts());
+        },
+        exportObserveMd(){
+          if (!this.observeResult?.reply_markdown) return;
+          const blob = new Blob([this.observeResult.reply_markdown], { type: 'text/markdown' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'pichain-observe-'+Date.now()+'.md';
+          a.click();
+        },
+        startSse(){
+          try {
+            if (this._es) this._es.close();
+            this.sseOk = null;
+            const es = new EventSource('/api/v2/stream?network='+this.network);
+            this._es = es;
+            es.onmessage = (ev) => {
+              try {
+                const d = JSON.parse(ev.data);
+                this.sseOk = !d.error; this._sseLast = Date.now();
+                if (d.height != null && this.stats) {
+                  // only update height meta if object shape
+                  if (this.stats.height && typeof this.stats.height === 'object') {
+                    this.stats.height = { ...this.stats.height, value: d.height, display: String(d.height), fetchedAt: d.fetchedAt };
+                  }
+                }
+              } catch(e) { this.sseOk = false; }
+            };
+            es.onerror = () => { this.sseOk = false; };
+            es.onopen = () => { if (this.sseOk !== true) this.sseOk = null; };
+          } catch(e) { this.sseOk = false; }
+        },
+
+        runObserve(){
+          const q = (this.observeQ || '').trim();
+          if (!q) return;
+          this.observeResult = null;
+          fetch('/api/v2/observe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: q, network: this.network, lang: this.lang, address: this.walletResult?.address })
+          }).then(r => r.json()).then(d => { this.observeResult = d; })
+            .catch(e => { this.observeResult = { reply_markdown: e.message, evidence: [] }; });
+        },
+
+
+        statusDotClass(){
+          const s = this.stats.consensusStatus || this.stats.networkStatus?.status;
+          if (s === 'ok') return 'bg-emerald-400';
+          if (s === 'slow' || s === 'busy') return 'bg-amber-400';
+          if (s === 'stalled' || s === 'degraded') return 'bg-red-400';
+          return 'bg-slate-500';
+        },
+        fetchSources(){
+          fetch('/api/v2/sources').then(r=>r.json()).then(d=>{ this.sources = d || {}; }).catch(()=>{});
+          fetch('/api/v2/snapshots?network='+this.network+'&limit=48').then(r=>r.json()).then(d=>{
+            if (d.from) this.snapshotNote = (this.lang==='vi'?'Dữ liệu snapshot từ ':'Snapshots from ')+d.from;
+            else this.snapshotNote = this.lang==='vi'?'Chưa có snapshot (collector đang thu)':'No snapshots yet (collector warming up)';
+          }).catch(()=>{});
+        }
+      };
+    }
+    // Global helper so AI panel / other scripts can save a report
+    window.__pichainSaveReport = async function(title, question, answer, network){
+      try {
+        await fetch('/api/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,question,answer,network:network||'mainnet'})});
+      } catch(e) {}
+    };
+  </script>
+  <script src="/ai-module/ai-module.js"></script>
+  <script src="/feedback-module/feedback-module.js"></script>
+  <script src="/ai-panel.js"></script>
+  <img class="paf-made-by" src="/made-by.png" alt="Made with App Builder — Pi SoloHost">
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "pi-chain-monitor",
+  "version": "2.4.1",
+  "description": "PiChain Monitor \u2014 pro pair charts (candles, volume, indicators, timeframes), live badge fix",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node scripts/check-integrity.js && node scripts/check-i18n.js && node --test test/*.test.js && node test.js",
+    "integrity": "node scripts/check-integrity.js",
+    "i18n": "node scripts/check-i18n.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
